@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Souffle</title>
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Souffle">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap">
+<style>
+/* Layout : une colonne mobile, 3 onglets en bas. Blanc, sobre ; la seule couleur forte est le vert « souffle » (progrès), le rouge ne sert qu'au dépassement. */
+:root{
+  --bg:#ffffff; --surface:#f5f6f6; --line:#e8eaea; --ink:#0d1214; --muted:#69717a; --faint:#a3a9b0;
+  --accent:#0f766e; --accent-soft:#e7f3f1; --over:#d92d20; --over-soft:#fdf0ef; --amber:#b54708;
+  --f:"Geist",ui-sans-serif,-apple-system,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --r:16px; color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:15px;line-height:1.45}
+body{padding-top:env(safe-area-inset-top,0px)}
+button{font:inherit;color:inherit}
+.app{max-width:480px;margin:0 auto;padding-inline:20px;padding-block:8px calc(96px + env(safe-area-inset-bottom,0px))}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.label{font-size:12px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+
+/* Header */
+.top{display:flex;justify-content:space-between;align-items:center;padding-block:10px 18px}
+.brand{font-weight:700;font-size:17px;letter-spacing:-.01em}
+.brand span{color:var(--accent)}
+.countdown{font-size:13px;color:var(--muted)}
+.countdown b{color:var(--ink);font-weight:600}
+
+.view[hidden]{display:none}
+section+section{margin-top:28px}
+
+/* Day switch */
+.day{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.day h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.02em;text-transform:capitalize}
+.day small{display:block;font-size:13px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0}
+.chev{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--bg);display:grid;place-items:center;cursor:pointer}
+.chev:disabled{opacity:.3;cursor:default}
+.chev svg{width:16px;height:16px}
+
+/* Hero */
+.hero{display:grid;grid-template-columns:132px 1fr;gap:20px;align-items:center;margin-top:20px}
+.ring{position:relative;width:132px;height:132px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .c{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.ring .big{font-size:44px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.ring .of{font-size:13px;color:var(--muted);margin-top:2px}
+.next .label{margin-bottom:2px}
+.next .time{font-size:32px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.next .in{font-size:14px;color:var(--muted);margin-top:2px}
+.pill{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;font-weight:500;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.pill.full{background:#fff4e5;color:var(--amber)}
+.pill.over{background:var(--over-soft);color:var(--over)}
+
+/* Actions */
+.actions{display:flex;gap:10px;margin-top:22px}
+.primary{flex:1;height:54px;border:0;border-radius:14px;background:var(--ink);color:#fff;font-weight:600;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:transform .08s}
+.primary:active{transform:scale(.98)}
+.primary .e{font-size:20px}
+.ghost{height:54px;padding-inline:16px;border:1px solid var(--line);border-radius:14px;background:var(--bg);cursor:pointer;font-weight:500;color:var(--muted)}
+.ghost:disabled{opacity:.4}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Slots */
+.secthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.secthead h2{margin:0;font-size:16px;font-weight:600}
+.secthead span{font-size:13px;color:var(--muted)}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px}
+.slot{position:relative;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:background .15s,border-color .15s}
+.slot .e{font-size:20px;line-height:1;transition:opacity .15s,filter .15s}
+.slot .t{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.slot.done{background:var(--surface);border-color:var(--surface)}
+.slot.done .e{opacity:.35;filter:grayscale(1)}
+.slot.done .t{color:var(--ink)}
+.slot.done::after{content:"";position:absolute;top:6px;right:6px;width:14px;height:14px;border-radius:50%;background:var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat}
+.slot.next{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.slot.next .t{color:var(--accent);font-weight:600}
+.slot.extra{border-style:dashed}
+.slot.extra .e{opacity:.25;filter:grayscale(1)}
+.slot.extra.done{background:var(--over-soft);border:1px solid var(--over-soft)}
+.slot.extra.done .e{opacity:.8;filter:none}
+.slot.extra.done .t{color:var(--over)}
+.slot.extra.done::after{background-color:var(--over)}
+.extra-h{grid-column:1/-1;font-size:12px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:8px}
+.extra-h::after{content:"";flex:1;border-top:1px dashed var(--line)}
+.hint{font-size:13px;color:var(--muted);margin:12px 0 0}
+
+.tip{display:grid;grid-template-columns:28px 1fr;gap:6px;background:var(--surface);border-radius:var(--r);padding:14px 16px;font-size:14px}
+
+/* Parcours */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.tile{background:var(--bg);padding:16px}
+.tile b{display:block;font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.tile span{font-size:13px;color:var(--muted)}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:0}
+.steps{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.steps li{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);font-size:15px}
+.steps li span{color:var(--muted);font-size:14px}
+.steps li.passed{color:var(--muted)}
+.steps li.passed b::before{content:"✓ ";color:var(--accent)}
+.steps li.cur b{color:var(--accent)}
+
+/* Réglages */
+.form{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);font-weight:500;min-width:0}
+.form input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid transparent;border-radius:10px;padding:11px 12px;width:100%;min-width:0;-webkit-appearance:none}
+.form input:focus{border-color:var(--accent);outline:none;background:var(--bg)}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.btn{height:44px;padding-inline:16px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-weight:500;cursor:pointer}
+.btn.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
+.note{font-size:13px;color:var(--muted);margin:10px 0 0}
+.ok{color:var(--accent)} .err{color:var(--over)}
+.sources{font-size:12px;color:var(--faint);line-height:1.5}
+
+/* Tab bar */
+.tabs{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+.tabs nav{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.tabs button{border:0;background:none;padding:10px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:500;color:var(--faint);cursor:pointer}
+.tabs button svg{width:22px;height:22px}
+.tabs button[aria-current="page"]{color:var(--ink)}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(13,18,20,.32);z-index:10;display:flex;align-items:flex-end;justify-content:center;animation:fade .2s}
+.sheet{width:100%;max-width:480px;max-height:92%;overflow:auto;background:var(--bg);border-radius:22px 22px 0 0;padding:10px 22px calc(24px + env(safe-area-inset-bottom,0px));animation:up .32s cubic-bezier(.2,.9,.3,1)}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 16px}
+.sheet .kicker{font-size:13px;color:var(--muted)}
+.sheet h2{margin:4px 0 0;font-size:26px;font-weight:600;letter-spacing:-.02em;text-wrap:balance}
+.sheet .score{display:flex;align-items:baseline;gap:8px;margin-top:6px;color:var(--muted)}
+.sheet .score b{font-size:20px;color:var(--ink)}
+.money{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:18px 0}
+.money div{background:var(--bg);padding:12px 10px}
+.money b{display:block;font-size:18px;font-weight:600;color:var(--accent);letter-spacing:-.01em}
+.money span{font-size:12px;color:var(--muted)}
+.health{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.health li{display:grid;grid-template-columns:28px 1fr;gap:4px;font-size:15px}
+.closing{margin:18px 0 0;font-weight:500}
+.sheet .primary{margin-top:20px;width:100%}
+.login p{color:var(--muted);margin:6px 0 16px}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+@keyframes fade{from{opacity:0}}
+@keyframes pop{50%{transform:scale(1.12)}}
+.pop{animation:pop .3s}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:360px){.hero{grid-template-columns:112px 1fr}.ring{width:112px;height:112px}.ring .big{font-size:36px}.next .time{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">Souffle<span>.</span></div>
+    <div class="countdown" id="countdown"></div>
+  </header>
+
+  <!-- AUJOURD'HUI -->
+  <main class="view" id="v-today">
+    <section>
+      <div class="day">
+        <button class="chev" id="prev" aria-label="Jour précédent"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg></button>
+        <h1 id="dayTitle"></h1>
+        <button class="chev" id="next" aria-label="Jour suivant"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>
+      </div>
+      <div class="hero">
+        <div class="ring" id="ring">
+          <svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="58" fill="none" stroke="var(--line)" stroke-width="8"/><circle id="ringArc" cx="66" cy="66" r="58" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round" stroke-dasharray="364.4" stroke-dashoffset="364.4" style="transition:stroke-dashoffset .5s,stroke .3s"/></svg>
+          <div class="c"><div class="big num" id="count">0</div><div class="of" id="of">sur 0</div></div>
+        </div>
+        <div class="next" id="nextBox"></div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="smoke"><span class="e">🚬</span><span id="smokeLbl">J'en fume une</span></button>
+        <button class="ghost" id="undo" aria-label="Annuler la dernière">Annuler</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="secthead"><h2>Planning du jour</h2><span id="planSub"></span></div>
+      <div class="slots" id="slots"></div>
+      <p class="hint">Les heures sont réparties entre ton réveil et ton coucher pour que la dose tienne jusqu'au soir. Touche une case pour cocher ou décocher.</p>
+    </section>
+
+    <section><div class="tip" id="tip"></div></section>
+  </main>
+
+  <!-- PARCOURS -->
+  <main class="view" id="v-path" hidden>
+    <section>
+      <div class="tiles">
+        <div class="tile"><b class="num" id="tSaved">0</b><span>💰 économisés</span></div>
+        <div class="tile"><b class="num" id="tAvoided">0</b><span>🚭 cigarettes évitées</span></div>
+        <div class="tile"><b class="num" id="tStreak">0</b><span>🔥 jours de suite dans le quota</span></div>
+        <div class="tile"><b class="num" id="tLife">0</b><span>⏳ de vie préservée</span></div>
+      </div>
+    </section>
+    <section>
+      <div class="secthead"><h2>Vers zéro</h2><span id="chartSub"></span></div>
+      <svg class="chart" id="chart" viewBox="0 0 440 170" role="img" aria-label="Quota prévu et cigarettes fumées par jour"></svg>
+      <div class="legend"><span><i style="background:var(--line)"></i>quota prévu</span><span><i style="background:var(--accent)"></i>fumées, dans le quota</span><span><i style="background:var(--over)"></i>au-dessus</span></div>
+    </section>
+    <section>
+      <div class="secthead"><h2>Paliers</h2></div>
+      <ul class="steps" id="steps"></ul>
+    </section>
+  </main>
+
+  <!-- RÉGLAGES -->
+  <main class="view" id="v-settings" hidden>
+    <section>
+      <div class="secthead"><h2>Plan</h2></div>
+      <form class="form" id="form" autocomplete="off">
+        <label>Conso de départ / jour<input id="fStart" type="number" min="1" max="60" inputmode="numeric"></label>
+        <label>Début du plan<input id="fStartDate" type="date"></label>
+        <label>Zéro au plus tard le<input id="fEndDate" type="date"></label>
+        <label>Prix du paquet<input id="fPrice" type="number" min="0" step="any" inputmode="decimal"></label>
+        <label>Cigarettes / paquet<input id="fPack" type="number" min="1" inputmode="numeric"></label>
+        <label>Devise<input id="fCur" type="text" maxlength="4"></label>
+        <label>Réveil<input id="fWake" type="time"></label>
+        <label>Coucher<input id="fSleep" type="time"></label>
+      </form>
+      <div class="btnrow"><button class="btn dark" id="save" type="button">Enregistrer</button></div>
+      <p class="note" id="planNote"></p>
+    </section>
+    <section>
+      <div class="secthead"><h2>Notifications</h2></div>
+      <p class="note" style="margin-top:0">Chaque matin, juste après ton heure de réveil : le bilan de la veille, l'argent économisé et le quota du jour.</p>
+      <div class="btnrow">
+        <button class="btn dark" id="pushOn" type="button">Activer</button>
+        <button class="btn" id="pushTest" type="button">Tester</button>
+        <button class="btn" id="showBilan" type="button">Voir le bilan d'hier</button>
+      </div>
+      <p class="note" id="pushNote"></p>
+    </section>
+    <section>
+      <div class="secthead"><h2>Compte</h2></div>
+      <p class="note" style="margin-top:0" id="accountNote"></p>
+      <div class="btnrow"><button class="btn" id="account" type="button"></button></div>
+    </section>
+    <section>
+      <p class="sources">Chiffres santé approximatifs. Cancer du poumon : Godtfredsen et al., JAMA 2005 (réduire de moitié ≈ −27 %). Cœur : Hackshaw et al., BMJ 2018 (1 cigarette/jour garde ~50 % du surrisque). Espérance de vie : UCL, Addiction 2025 (~20 min par cigarette). Repères d'arrêt : OMS. Une journée se termine à 4 h du matin.</p>
+    </section>
+  </main>
+</div>
+
+<div class="tabs"><nav>
+  <button data-tab="today" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Aujourd'hui</button>
+  <button data-tab="path"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M6 16V8M10 16v-5M14 16v-3M18 16v-1"/></svg>Parcours</button>
+  <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Réglages</button>
+</nav></div>
+
+<div id="sheet"></div>
+
+<script src="config.js"></script>
+<script src="plan.js?v=1"></script>
+<script src="backend.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>

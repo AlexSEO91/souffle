@@ -13,21 +13,31 @@
   let view = P.dayKey(Date.now(), S.settings.tzOffset);
   let syncTimer = null;
 
-  function blank() { return { settings: { ...P.DEFAULTS, tzOffset: tzNow }, log: {}, bilanSeen: "", updatedAt: 0 }; }
+  function blank() {
+    const local = tzNow === 420 ? { packPrice: 160, currency: "฿" } : { packPrice: 13, currency: "€" };
+    return { settings: { ...P.DEFAULTS, ...local, tzOffset: tzNow }, log: {}, bilanSeen: "", setupDone: false, updatedAt: 0 };
+  }
   function normalize(s) { const b = blank(); return { ...b, ...s, settings: { ...b.settings, ...((s && s.settings) || {}) }, log: { ...((s && s.log) || {}) } }; }
   function load() { try { const r = localStorage.getItem(KEY); if (r) return normalize(JSON.parse(r)); } catch (e) {} return blank(); }
   function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  /** Ce que le serveur voit en clair : réveil + fuseau (heure de la notif) et, seulement si activé, le texte de la notif. */
+  function meta() {
+    const s = st(), tk = todayKey();
+    return { wake: s.wake, tzOffset: s.tzOffset, preview: s.richPush && S.setupDone ? { forKey: tk, push: P.report(S, tk, P.addDays(tk, 1)).push } : null };
+  }
+  function syncNow() { if (B.connected && S.setupDone) return B.putState(S, meta()).catch(() => {}); }
   function commit() {
     S.updatedAt = Date.now(); saveLocal();
     clearTimeout(syncTimer);
-    if (B.configured && B.connected) syncTimer = setTimeout(() => B.putState(S).catch(() => {}), 700);
+    if (B.connected) syncTimer = setTimeout(syncNow, 700);
   }
+  function adopt(remote) { const tz = tzNow; S = normalize(remote); S.setupDone = true; S.settings.tzOffset = tz; saveLocal(); view = todayKey(); }
   async function pull() {
-    if (!B.configured || !B.connected) return;
+    if (!B.connected) return;
     try {
       const remote = await B.getState();
-      if (remote && (remote.updatedAt || 0) > (S.updatedAt || 0)) { const tz = S.settings.tzOffset; S = normalize(remote); S.settings.tzOffset = tz; saveLocal(); render(); maybeBilan(); }
-      else if (!remote || (S.updatedAt || 0) > (remote.updatedAt || 0)) await B.putState(S);
+      if (remote && (remote.updatedAt || 0) > (S.updatedAt || 0)) { adopt(remote); render(); maybeBilan(); }
+      else if (S.setupDone && (!remote || (S.updatedAt || 0) > (remote.updatedAt || 0))) await syncNow();
     } catch (e) { /* hors ligne : on garde le local */ }
   }
 
@@ -180,6 +190,7 @@
   // ---------- bilan du matin ----------
   function maybeBilan(force) {
     const s = st(), tk = todayKey(), y = P.addDays(tk, -1);
+    if (!S.setupDone) return;
     if (y < s.startDate) { if (force) toastSheet("Pas encore de bilan", "Le premier bilan arrive demain matin, sur la journée d'aujourd'hui."); return; }
     if (!force && (S.bilanSeen === tk || minsNow(tk) < P.toMin(s.wake) - 120)) return;
     const r = P.report(S, y, tk);
@@ -194,9 +205,9 @@
       <p class="closing">${r.closing}</p>
       <button class="primary" data-close>${r.ok ? "C'est parti" : "On repart"}</button>`);
   }
-  function openSheet(inner) {
+  function openSheet(inner, locked) {
     const el = $("sheet");
-    el.innerHTML = `<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${inner}</div></div>`;
+    el.innerHTML = `<div class="scrim"${locked ? "" : " data-close"}><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${inner}</div></div>`;
     el.querySelectorAll("[data-close]").forEach((x) => x.addEventListener("click", (e) => { if (e.target === x) closeSheet(); }));
   }
   function closeSheet() { $("sheet").innerHTML = ""; }
@@ -231,7 +242,8 @@
   const pushNote = (t, cls) => { $("pushNote").innerHTML = cls ? `<span class="${cls}">${t}</span>` : t; };
   async function pushState() {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return pushNote("Sur iPhone : ouvre l'app depuis l'écran d'accueil (Safari → Partager → Sur l'écran d'accueil) pour activer les notifications.");
-    if (!B.connected) return pushNote("Connecte-toi (section Compte) pour recevoir les notifications.");
+    $("fRich").checked = !!st().richPush;
+    if (!B.connected) return pushNote("Crée un compte ou connecte-toi (section Compte) pour recevoir les notifications.");
     const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription();
     $("pushOn").textContent = sub ? "Désactiver" : "Activer";
     pushNote(sub ? "Activées sur cet appareil." : Notification.permission === "denied" ? "Refusées dans les réglages du téléphone. Réglages → Notifications → Souffle." : "Désactivées sur cet appareil.", sub ? "ok" : "");
@@ -245,7 +257,7 @@
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(window.SOUFFLE_CONFIG.vapidPublicKey) });
       const j = sub.toJSON();
       await B.savePushSub({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_agent: navigator.userAgent.slice(0, 200) });
-      await B.putState(S).catch(() => {});
+      await syncNow();
       pushState();
     } catch (e) { pushNote("Impossible d'activer : " + e.message, "err"); }
   };
@@ -254,31 +266,175 @@
     catch (e) { pushNote("Échec : " + e.message, "err"); }
   };
   $("showBilan").onclick = () => maybeBilan(true);
+  $("fRich").onchange = () => { st().richPush = $("fRich").checked; commit(); };
 
   // ---------- compte ----------
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const PRIVACY = "Tes données sont chiffrées sur ton téléphone avant d'être sauvegardées. Personne d'autre ne peut les lire, pas même l'administrateur de l'app. Mot de passe oublié : ton code de secours te permet d'en choisir un nouveau sans rien perdre.";
   function renderAccount() {
-    if (!B.configured) { $("accountNote").textContent = "Mode local (pas de serveur configuré)."; $("account").hidden = true; return; }
-    $("accountNote").textContent = B.connected ? `Connecté : ${(B.user && B.user.email) || "compte Shredlog"}. Données synchronisées.` : "Non connecté : les données restent sur ce téléphone.";
-    $("account").textContent = B.connected ? "Se déconnecter" : "Se connecter";
+    const box = $("accountBox");
+    if (B.connected) {
+      box.innerHTML = `<p class="acc-mail">${esc((B.user && B.user.email) || "")}</p><p class="note">🔒 ${PRIVACY}</p>
+        <div class="btnrow"><button class="btn" id="aPw" type="button">Changer le mot de passe</button><button class="btn" id="aRec" type="button">Nouveau code de secours</button><button class="btn" id="aOut" type="button">Se déconnecter</button></div>
+        <div class="btnrow"><button class="btn danger" id="aDel" type="button">Supprimer mon compte</button></div>`;
+      $("aPw").onclick = openPassword;
+      $("aRec").onclick = async () => { try { showRecovery(await B.newRecovery(), closeSheet, true); } catch (e) { toastSheet("Impossible", e.message); } };
+      $("aOut").onclick = confirmLogout; $("aDel").onclick = confirmDelete;
+    } else {
+      box.innerHTML = `<p class="note" style="margin-top:0">Pas de compte sur ce téléphone : tes données restent ici, sans sauvegarde ni notifications.</p>
+        <div class="btnrow"><button class="btn dark" id="aNew" type="button">Créer un compte</button><button class="btn" id="aIn" type="button">Se connecter</button></div>`;
+      $("aNew").onclick = () => openAuth("signup"); $("aIn").onclick = () => openAuth("login");
+    }
   }
-  $("account").onclick = () => { if (B.connected) { B.logout(); renderAccount(); pushState(); } else openLogin(); };
-  function openLogin() {
-    openSheet(`<div class="login"><h2>Connexion</h2><p>Même compte que Shredlog.</p>
-      <form class="form" id="loginForm" style="grid-template-columns:1fr"><label>Email<input id="lEmail" type="email" autocomplete="username" required></label><label>Mot de passe<input id="lPass" type="password" autocomplete="current-password" required></label></form>
-      <p class="note err" id="lErr"></p><button class="primary" id="lGo">Se connecter</button></div>`);
+  function openWelcome() {
+    openSheet(`<div class="welcome"><div class="kicker">Souffle</div><h2>Arrêter de fumer, palier par palier.</h2>
+      <p class="note" style="font-size:15px">Un quota qui baisse chaque semaine, des heures pour tenir jusqu'au soir, et chaque matin le bilan de la veille.</p>
+      <button class="primary" id="wNew">Créer un compte</button>
+      <button class="btn wide" id="wIn" type="button">J'ai déjà un compte</button>
+      <button class="link" id="wLocal" type="button">Continuer sans compte</button></div>`, true);
+    $("wNew").onclick = () => openAuth("signup"); $("wIn").onclick = () => openAuth("login");
+    $("wLocal").onclick = () => openSetup();
+  }
+  function openAuth(mode) {
+    const up = mode === "signup";
+    openSheet(`<div class="login"><h2>${up ? "Créer un compte" : "Connexion"}</h2>
+      <form class="form one" id="aForm">
+        <label>Email<input id="lEmail" type="email" autocomplete="username" required></label>
+        <label>Mot de passe${up ? " (8 caractères min.)" : ""}<input id="lPass" type="password" autocomplete="${up ? "new-password" : "current-password"}" required></label>
+        ${up ? `<label>Code d'invitation<input id="lCode" type="text" autocapitalize="characters" autocomplete="off" required></label>` : ""}
+      </form>
+      ${up ? `<p class="note">🔒 ${PRIVACY}</p>` : ""}
+      <p class="note err" id="lErr"></p>
+      <button class="primary" id="lGo">${up ? "Créer mon compte" : "Se connecter"}</button>
+      <button class="link" id="lSwitch" type="button">${up ? "J'ai déjà un compte" : "Créer un compte"}</button>
+      ${up ? "" : `<button class="link" id="lForgot" type="button">Mot de passe oublié ?</button>`}</div>`, !S.setupDone);
+    $("lSwitch").onclick = () => openAuth(up ? "login" : "signup");
+    if (!up) $("lForgot").onclick = openRecover;
+    let busy = false;
     const go = async (e) => {
-      e && e.preventDefault();
-      try { await B.login($("lEmail").value.trim(), $("lPass").value); closeSheet(); renderAccount(); await pull(); pushState(); }
-      catch (err) { $("lErr").textContent = err.message; }
+      e && e.preventDefault(); if (busy) return;
+      const email = $("lEmail").value.trim(), pw = $("lPass").value;
+      if (up && pw.length < 8) { $("lErr").textContent = "Mot de passe : 8 caractères minimum."; return; }
+      busy = true; $("lGo").textContent = "Un instant…"; $("lErr").textContent = "";
+      try {
+        afterAuth(up ? await B.signup(email, pw, $("lCode").value) : await B.login(email, pw));
+      } catch (err) { $("lErr").textContent = err.message; busy = false; $("lGo").textContent = up ? "Créer mon compte" : "Se connecter"; }
     };
-    $("lGo").onclick = go; $("loginForm").onsubmit = go;
+    $("lGo").onclick = go; $("aForm").onsubmit = go;
+  }
+  function afterAuth(r) {
+    const next = () => {
+      if (r.state) { adopt(r.state); closeSheet(); render(); renderAccount(); pushState(); maybeBilan(false); }
+      else if (S.setupDone) { syncNow(); closeSheet(); renderAccount(); pushState(); }
+      else openSetup();
+    };
+    if (r.recoveryCode) showRecovery(r.recoveryCode, next); else next();
+  }
+  function showRecovery(code, next, fromAccount) {
+    openSheet(`<div class="kicker">Important</div><h2>Ton code de secours</h2>
+      <p class="note" style="font-size:15px">Si tu oublies ton mot de passe, ce code te permet d'en choisir un nouveau <b>sans perdre tes données</b>. Lui seul peut les déverrouiller : personne d'autre ne le connaît, pas même l'administrateur.</p>
+      <div class="code mono" id="rCode">${code}</div>
+      <div class="btnrow"><button class="btn" id="rCopy" type="button">Copier</button></div>
+      <p class="note">Garde-le dans tes notes, une capture d'écran ou un email à toi-même.${fromAccount ? " L'ancien code ne fonctionne plus." : ""}</p>
+      <label class="switch"><input type="checkbox" id="rOk"><span><b>Je l'ai bien noté</b></span></label>
+      <button class="primary" id="rGo" disabled>Continuer</button>`, true);
+    $("rCopy").onclick = async () => { try { await navigator.clipboard.writeText(code); $("rCopy").textContent = "Copié ✓"; } catch (e) { const sel = getSelection(), rg = document.createRange(); rg.selectNodeContents($("rCode")); sel.removeAllRanges(); sel.addRange(rg); } };
+    $("rOk").onchange = () => { $("rGo").disabled = !$("rOk").checked; };
+    $("rGo").onclick = next;
+  }
+  function openRecover() {
+    openSheet(`<div class="login"><h2>Mot de passe oublié</h2><p>Entre ton code de secours et choisis un nouveau mot de passe. Tes données sont conservées.</p>
+      <form class="form one" id="vForm">
+        <label>Email<input id="vEmail" type="email" autocomplete="username" required></label>
+        <label>Code de secours<input id="vCode" type="text" autocapitalize="characters" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" required></label>
+        <label>Nouveau mot de passe (8 caractères min.)<input id="vPass" type="password" autocomplete="new-password" required></label>
+      </form><p class="note err" id="vErr"></p><button class="primary" id="vGo">Changer le mot de passe</button>
+      <button class="link" id="vBack" type="button">Retour</button></div>`, !S.setupDone);
+    $("vBack").onclick = () => openAuth("login");
+    $("vGo").onclick = async () => {
+      if ($("vPass").value.length < 8) { $("vErr").textContent = "8 caractères minimum."; return; }
+      $("vGo").textContent = "Un instant…";
+      try { afterAuth(await B.recover($("vEmail").value.trim(), $("vCode").value, $("vPass").value)); }
+      catch (e) { $("vErr").textContent = e.message; $("vGo").textContent = "Changer le mot de passe"; }
+    };
+  }
+
+  // ---------- installation sur l'écran d'accueil ----------
+  let installEvt = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; renderInstall(); });
+  const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+  function renderInstall() {
+    const box = $("installBox"); if (!box) return;
+    if (standalone()) { box.innerHTML = `<p class="note ok" style="margin-top:0">Installée sur cet appareil ✓</p>`; return; }
+    box.innerHTML = `<p class="note" style="margin-top:0">Pour l'utiliser comme une vraie app et recevoir les notifications.</p><div class="btnrow"><button class="btn dark" id="iGo" type="button">Installer l'app</button></div>`;
+    $("iGo").onclick = openInstall;
+  }
+  async function openInstall() {
+    if (installEvt) { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; renderInstall(); return; }
+    const steps = isIOS()
+      ? ["Ouvre cette page dans <b>Safari</b>", "Touche le bouton <b>Partager</b> (carré avec une flèche)", "Choisis <b>Sur l'écran d'accueil</b>, puis <b>Ajouter</b>", "Ouvre Souffle depuis l'icône"]
+      : ["Ouvre cette page dans <b>Chrome</b>", "Touche le menu <b>⋮</b> en haut à droite", "Choisis <b>Installer l'application</b> (ou « Ajouter à l'écran d'accueil »)", "Ouvre Souffle depuis l'icône"];
+    openSheet(`<h2>Installer Souffle</h2><ol class="steps-ol">${steps.map((x) => `<li>${x}</li>`).join("")}</ol><button class="primary" data-close-btn>OK</button>`);
+    document.querySelector("[data-close-btn]").onclick = closeSheet;
+  }
+
+  function openSetup() {
+    const s = st(), tk = todayKey();
+    const end = P.diffDays(tk, s.endDate) >= 30 ? s.endDate : P.addDays(tk, 90);
+    openSheet(`<div class="setup"><div class="kicker">Ton plan</div><h2>On part d'où tu en es.</h2>
+      <form class="form" id="sForm">
+        <label class="full">Cigarettes par jour en ce moment<input id="sStart" type="number" min="1" max="60" inputmode="numeric" value="${s.start}" required></label>
+        <label>Objectif : 0 tenu le<input id="sEnd" type="date" value="${end}" min="${P.addDays(tk, 14)}" required></label>
+        <label>Jours à 0 avant (marge)<input id="sBuf" type="number" min="0" max="60" inputmode="numeric" value="${s.zeroBuffer}"></label>
+        <label>Prix du paquet<input id="sPrice" type="number" min="0" step="any" inputmode="decimal" value="${s.packPrice}"></label>
+        <label>Devise<input id="sCur" type="text" maxlength="4" value="${esc(s.currency)}"></label>
+        <label>Réveil<input id="sWake" type="time" value="${s.wake}"></label>
+        <label>Coucher<input id="sSleep" type="time" value="${s.sleep}"></label>
+      </form>
+      <p class="note" id="sPrev"></p>
+      <button class="primary" id="sGo">Lancer mon plan</button></div>`, true);
+    const read = () => ({ ...st(), start: Math.max(1, Math.round(+$("sStart").value) || 1), startDate: tk, endDate: $("sEnd").value || end, zeroBuffer: Math.max(0, Math.min(60, Math.round(+$("sBuf").value) || 0)), packPrice: Math.max(0, +$("sPrice").value || 0), currency: $("sCur").value.trim() || "€", wake: $("sWake").value || "08:00", sleep: $("sSleep").value || "23:30" });
+    const prev = () => { const x = read(); if (x.endDate <= tk) return; const z = P.zeroDate(x); $("sPrev").textContent = `Environ −1 cigarette tous les ${Math.max(1, Math.round(P.diffDays(tk, P.zeroTarget(x)) / x.start))} jours. Zéro le ${dateLabel(z, { day: "numeric", month: "long" })}, puis ${P.diffDays(z, x.endDate)} jours à 0 avant l'objectif.`; };
+    $("sForm").oninput = prev; prev();
+    $("sGo").onclick = async () => {
+      const x = read(); if (x.endDate <= P.addDays(tk, 7)) { $("sPrev").innerHTML = `<span class="err">Choisis un objectif à plus d'une semaine.</span>`; return; }
+      S.settings = x; S.setupDone = true; S.bilanSeen = tk; view = tk; commit(); await syncNow();
+      closeSheet(); render(); tab("today");
+      if (B.connected) toastSheet("C'est parti", "Pense à activer les notifications dans Réglages pour recevoir ton bilan chaque matin.");
+    };
+  }
+  function openPassword() {
+    openSheet(`<div class="login"><h2>Changer le mot de passe</h2><form class="form one" id="pForm">
+      <label>Mot de passe actuel<input id="pOld" type="password" autocomplete="current-password" required></label>
+      <label>Nouveau mot de passe (8 caractères min.)<input id="pNew" type="password" autocomplete="new-password" required></label></form>
+      <p class="note err" id="pErr"></p><button class="primary" id="pGo">Enregistrer</button></div>`);
+    $("pGo").onclick = async () => {
+      if ($("pNew").value.length < 8) { $("pErr").textContent = "8 caractères minimum."; return; }
+      try { await B.changePassword($("pOld").value, $("pNew").value); toastSheet("Mot de passe changé", "Tes données restent chiffrées, avec le nouveau mot de passe."); }
+      catch (e) { $("pErr").textContent = e.message; }
+    };
+  }
+  async function unsubscribePush() { try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) { await B.deletePushSub(sub.endpoint).catch(() => {}); await sub.unsubscribe(); } } catch (e) {} }
+  function wipeLocal() { try { localStorage.removeItem(KEY); } catch (e) {} S = blank(); view = todayKey(); }
+  function confirmLogout() {
+    openSheet(`<h2>Se déconnecter ?</h2><p class="note" style="font-size:15px">Tes données restent sauvegardées, chiffrées, sur ton compte. Elles seront effacées de ce téléphone.</p>
+      <button class="primary" id="oGo">Se déconnecter</button><button class="btn wide" data-close-btn type="button">Annuler</button>`);
+    document.querySelector("[data-close-btn]").onclick = closeSheet;
+    $("oGo").onclick = async () => { await syncNow(); await unsubscribePush(); B.logout(); wipeLocal(); closeSheet(); render(); renderAccount(); tab("today"); openWelcome(); };
+  }
+  function confirmDelete() {
+    openSheet(`<h2>Supprimer ton compte ?</h2><p class="note" style="font-size:15px">Toutes tes données Souffle seront effacées définitivement, ici et sur le serveur. Impossible de revenir en arrière.</p>
+      <p class="note err" id="dErr"></p><button class="primary danger-bg" id="dGo">Supprimer définitivement</button><button class="btn wide" data-close-btn type="button">Annuler</button>`);
+    document.querySelector("[data-close-btn]").onclick = closeSheet;
+    $("dGo").onclick = async () => { try { await unsubscribePush(); await B.deleteAccount(); wipeLocal(); closeSheet(); render(); renderAccount(); tab("today"); openWelcome(); } catch (e) { $("dErr").textContent = e.message; } };
   }
 
   // ---------- navigation ----------
   function tab(name) {
     ["today", "path", "settings"].forEach((t) => { $("v-" + t).hidden = t !== name; });
     document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === name ? "page" : "false"));
-    if (name === "settings") { fillForm(); pushState(); renderAccount(); }
+    if (name === "settings") { fillForm(); pushState(); renderAccount(); renderInstall(); }
     window.scrollTo(0, 0);
   }
   document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => tab(b.dataset.tab)));
@@ -299,8 +455,8 @@
     navigator.serviceWorker.addEventListener("message", (e) => { if (e.data && e.data.nav) route(e.data.nav); });
   }
   render(); route(location.hash);
-  if (location.hash !== "#bilan") maybeBilan(false);
-  pull();
+  if (!S.setupDone) { if (B.connected) pull().then(() => { if (!S.setupDone) openSetup(); }); else openWelcome(); }
+  else { if (location.hash !== "#bilan") maybeBilan(false); pull(); }
   setInterval(() => { const tk = todayKey(); if (view > tk) view = tk; render(); }, 30000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;

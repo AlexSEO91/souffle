@@ -150,6 +150,23 @@ section+section{margin-top:28px}
 .closing{margin:18px 0 0;font-weight:500}
 .sheet .primary{margin-top:20px;width:100%}
 .login p{color:var(--muted);margin:6px 0 16px}
+.form.one{grid-template-columns:1fr}
+.form .full{grid-column:1/-1}
+.sheet .form{margin-top:16px}
+.btn.wide{width:100%;margin-top:10px;height:50px}
+.btn.danger{color:var(--over);border-color:#f4c7c3}
+.danger-bg{background:var(--over)!important}
+.link{display:block;margin:14px auto 0;border:0;background:none;color:var(--muted);font-size:14px;text-decoration:underline;cursor:pointer}
+.acc-mail{font-weight:600;margin:0}
+.code{margin:16px 0 4px;padding:16px;border-radius:12px;background:var(--surface);font-size:19px;letter-spacing:.04em;text-align:center;word-break:break-all;user-select:all;-webkit-user-select:all}
+.primary:disabled{opacity:.35}
+.steps-ol{margin:14px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:10px;font-size:15px}
+.switch{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;margin-top:16px;font-size:13px;color:var(--muted);cursor:pointer}
+.switch b{display:block;color:var(--ink);font-size:15px;font-weight:500;margin-bottom:2px}
+.switch input{appearance:none;-webkit-appearance:none;width:44px;height:26px;border-radius:13px;background:var(--line);position:relative;cursor:pointer;transition:background .2s;margin:0}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(18px)}
 @keyframes up{from{transform:translateY(40px);opacity:0}}
 @keyframes fade{from{opacity:0}}
 @keyframes pop{50%{transform:scale(1.12)}}
@@ -235,6 +252,10 @@ section+section{margin-top:28px}
       <p class="note" id="planNote"></p>
     </section>
     <section>
+      <div class="secthead"><h2>Application</h2></div>
+      <div id="installBox"></div>
+    </section>
+    <section>
       <div class="secthead"><h2>Notifications</h2></div>
       <p class="note" style="margin-top:0">Chaque matin, juste après ton heure de réveil : le bilan de la veille, l'argent économisé et le quota du jour.</p>
       <div class="btnrow">
@@ -242,12 +263,12 @@ section+section{margin-top:28px}
         <button class="btn" id="pushTest" type="button">Tester</button>
         <button class="btn" id="showBilan" type="button">Voir le bilan d'hier</button>
       </div>
+      <label class="switch"><input type="checkbox" id="fRich"><span><b>Notifications détaillées</b> Conso et économies directement dans la notif. Ce texte passe alors par le serveur en clair. Désactivé : notif générique, aucun chiffre ne quitte ton téléphone.</span></label>
       <p class="note" id="pushNote"></p>
     </section>
     <section>
       <div class="secthead"><h2>Compte</h2></div>
-      <p class="note" style="margin-top:0" id="accountNote"></p>
-      <div class="btnrow"><button class="btn" id="account" type="button"></button></div>
+      <div id="accountBox"></div>
     </section>
     <section>
       <p class="sources">Chiffres santé approximatifs. Cancer du poumon : Godtfredsen et al., JAMA 2005 (réduire de moitié ≈ −27 %). Cœur : Hackshaw et al., BMJ 2018 (1 cigarette/jour garde ~50 % du surrisque). Espérance de vie : UCL, Addiction 2025 (~20 min par cigarette). Repères d'arrêt : OMS. Une journée se termine à 4 h du matin.</p>
@@ -264,8 +285,8 @@ section+section{margin-top:28px}
 <div id="sheet"></div>
 
 <script src="config.js"></script>
-<script src="plan.js?v=2"></script>
-<script src="backend.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="plan.js?v=3"></script>
+<script src="backend.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

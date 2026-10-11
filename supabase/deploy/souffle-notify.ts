@@ -4,6 +4,7 @@
 //            Les données étant chiffrées, la fonction ne lit QUE wake, tz_offset et, si l'utilisateur l'a activé, preview
 //            (texte de notif préparé par son téléphone). Sinon : notif générique sans aucun chiffre.
 //   "test"   (JWT utilisateur) → notif de test.
+//   "broadcast" (secret cron) → annonce d'une nouvelle version à tous les appareils abonnés (ouvre #update).
 //   "signup" (public, avec code d'invitation) → crée le compte (email confirmé d'office ; inscriptions publiques fermées).
 //   "recover" (public, avec le hash du code de secours) → nouveau mot de passe, données conservées.
 //   "delete" (JWT utilisateur) → supprime le compte et toutes ses données (cascade).
@@ -73,8 +74,13 @@ const window = globalThis;
     if (!n || n >= q) return base;
     let z = toMin(s.sleep); if (z <= toMin(s.wake)) z += 1440;
     const E = Math.max(toMin(s.wake) + 105, z - 60), L = doneMins[n - 1], r = q - n;
-    return base.map((t, i) => (i < n ? t : Math.max(t, Math.round((L + ((E - L) * (i - n + 1)) / r) / 5) * 5)));
+    // Écart jamais plus serré que le plan de base : on ne « rattrape » pas les cigarettes non fumées.
+    const baseGap = q > 1 ? (base[q - 1] - base[0]) / (q - 1) : 60;
+    const gap = Math.max(baseGap, (E - L) / r);
+    return base.map((t, i) => (i < n ? t : Math.max(t, Math.round((L + gap * (i - n + 1)) / 5) * 5)));
   }
+  /** Heure du coucher en minutes depuis minuit du jour (peut dépasser 1440). */
+  function bedMin(s) { let z = toMin(s.sleep); if (z <= toMin(s.wake)) z += 1440; return z; }
   const smoked = (state, key) => ((state && state.log && state.log[key]) || []).length;
   const perCig = (s) => (Number(s.packPrice) || 0) / (Number(s.packSize) || 20);
   function money(v, s) {
@@ -174,7 +180,7 @@ const window = globalThis;
     return out;
   }
 
-  const api = { DEFAULTS, settingsOf, zeroTarget, dayKey, minutesInto, toMin, fmtMin, quota, zeroDate, idealTimes, schedule, smoked, perCig, money, streak, zeroRun, totals, report, addDays, diffDays, parse, iso };
+  const api = { DEFAULTS, settingsOf, zeroTarget, dayKey, minutesInto, toMin, fmtMin, quota, zeroDate, idealTimes, schedule, bedMin, smoked, perCig, money, streak, zeroRun, totals, report, addDays, diffDays, parse, iso };
   root.Souffle = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
@@ -231,7 +237,7 @@ Deno.serve(async (req) => {
     }
 
     let users;
-    if (mode === "tick") {
+    if (mode === "tick" || mode === "broadcast") {
       const { data: secret, error } = await db.rpc("souffle_cron_secret"); if (error) throw error;
       if (!sameSecret(req.headers.get("x-cron-secret") || "", secret)) return json({ error: "Unauthorized" }, 401);
       const { data, error: e2 } = await db.from("souffle_push_subscriptions").select("user_id"); if (e2) throw e2;
@@ -252,6 +258,7 @@ Deno.serve(async (req) => {
       if (!subs || !subs.length) { report.push({ skipped: "aucun appareil abonné" }); continue; }
       let message = null, logKey = null, today = null;
       if (mode === "test") message = { title: "Souffle", body: "Les notifications fonctionnent sur cet appareil.", url: "#today", tag: "test" };
+      else if (mode === "broadcast") message = { title: String(body.title || "Nouvelle version de Souffle ✨").slice(0, 80), body: String(body.body || "Touche ici puis « Mettre à jour ».").slice(0, 200), url: "#update", tag: "update" };
       else {
         const { data: row } = await db.from("souffle_state").select("wake, tz_offset, preview").eq("user_id", uid).maybeSingle();
         if (!row || !row.wake) { report.push({ skipped: "pas encore configuré" }); continue; }

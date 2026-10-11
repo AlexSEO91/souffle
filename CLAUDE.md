@@ -26,12 +26,26 @@ Verrou Shredlog : `docs`, `shredlog_push_subscriptions` et le bucket `photos` r�
 3. `git init`, créer le dépôt **public** `AlexSEO91/souffle`, pousser sur `main`, activer GitHub Pages (branche `main`, racine). URL : https://alexseo91.github.io/souffle/
 4. Vérifier que la page charge. Sur l'iPhone : Safari → Partager → Sur l'écran d'accueil, ouvrir l'app, Réglages → Activer les notifications → Tester.
 
-## Mise à jour v2 (famille + chiffrement) — à faire une fois
+## Mise à jour v3 (annonce de version) — à faire une fois
+Exécuter `supabase/schema_v3.sql` (fonction `souffle_private.broadcast`).
+
+## Mise à jour v2 (famille + chiffrement) — déjà faite
 1. Exécuter `supabase/schema_v2.sql` sur `zucsemhdglkuifqvhusi`.
 1b. (schema_v2.sql inclut aussi kdf_rec, rec_hash, souffle_user_by_email.)
 2. `bash tools/build_edge.sh`, redéployer `souffle-notify` (verify_jwt off).
 3. Commit + push sur main. Vérifier que https://alexseo91.github.io/souffle/backend.js contient "PBKDF2".
 4. Afficher le code d'invitation : `select public.souffle_invite_code();`
+
+## Messages à chaque cigarette
+`messages.js` : 44 messages santé (paquet mélangé, pas de répétition avant d'avoir tout vu, état dans localStorage `souffle.deck`), 2 messages argent (~1 fois sur 6, jamais 2 d'affilée), 2 messages hors quota (alternés avec les messages santé). Principe : effet sur le corps + ce qu'on récupère, zéro culpabilisation.
+
+## Publier une nouvelle version (procédure à suivre à CHAQUE mise en ligne)
+1. Incrémenter `APP_VERSION` dans app.js, `version` dans changelog.json (même nombre), `VERSION` dans sw.js (souffle-vN) et tous les `?v=N` (index.html + sw.js).
+2. Mettre à jour `changelog.json` : `headline` (1 phrase, affichée dans le bandeau) + `items` [emoji, titre, description] (fiche « Quoi de neuf »).
+3. Si plan.js a changé : `bash tools/build_edge.sh` + redéployer souffle-notify (verify_jwt off).
+4. Commit + push, attendre que GitHub Pages serve la nouvelle version (changelog.json en ligne).
+5. Prévenir tout le monde : `select souffle_private.broadcast('Nouvelle version de Souffle ✨', '<headline>. Touche ici puis « Mettre à jour ».');`
+Les apps ouvertes détectent aussi seules la nouvelle version (changelog.json) et affichent le bandeau « Mettre à jour ».
 
 ## Mises à jour
 Toute modif de `plan.js` → relancer `tools/build_edge.sh` et redéployer la fonction. Incrémenter `VERSION` dans `sw.js` et les `?v=` dans `index.html` à chaque publication.

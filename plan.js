@@ -60,8 +60,13 @@
     if (!n || n >= q) return base;
     let z = toMin(s.sleep); if (z <= toMin(s.wake)) z += 1440;
     const E = Math.max(toMin(s.wake) + 105, z - 60), L = doneMins[n - 1], r = q - n;
-    return base.map((t, i) => (i < n ? t : Math.max(t, Math.round((L + ((E - L) * (i - n + 1)) / r) / 5) * 5)));
+    // Écart jamais plus serré que le plan de base : on ne « rattrape » pas les cigarettes non fumées.
+    const baseGap = q > 1 ? (base[q - 1] - base[0]) / (q - 1) : 60;
+    const gap = Math.max(baseGap, (E - L) / r);
+    return base.map((t, i) => (i < n ? t : Math.max(t, Math.round((L + gap * (i - n + 1)) / 5) * 5)));
   }
+  /** Heure du coucher en minutes depuis minuit du jour (peut dépasser 1440). */
+  function bedMin(s) { let z = toMin(s.sleep); if (z <= toMin(s.wake)) z += 1440; return z; }
   const smoked = (state, key) => ((state && state.log && state.log[key]) || []).length;
   const perCig = (s) => (Number(s.packPrice) || 0) / (Number(s.packSize) || 20);
   function money(v, s) {
@@ -161,7 +166,7 @@
     return out;
   }
 
-  const api = { DEFAULTS, settingsOf, zeroTarget, dayKey, minutesInto, toMin, fmtMin, quota, zeroDate, idealTimes, schedule, smoked, perCig, money, streak, zeroRun, totals, report, addDays, diffDays, parse, iso };
+  const api = { DEFAULTS, settingsOf, zeroTarget, dayKey, minutesInto, toMin, fmtMin, quota, zeroDate, idealTimes, schedule, bedMin, smoked, perCig, money, streak, zeroRun, totals, report, addDays, diffDays, parse, iso };
   root.Souffle = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

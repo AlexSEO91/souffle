@@ -61,8 +61,63 @@
     arr.push(ms); commit(); render();
     const c = $("count"); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop");
     if (navigator.vibrate) navigator.vibrate(12);
+    if (isToday) showToast(k);
   }
-  function undo() { const arr = logOf(view).slice(); if (!arr.length) return; arr.pop(); S.log[view] = arr; commit(); render(); }
+  function undo() { const arr = logOf(view).slice(); if (!arr.length) return; arr.pop(); S.log[view] = arr; commit(); render(); hideToast(); }
+
+  // ---------- un mot à chaque cigarette ----------
+  const MSG = window.SOUFFLE_MESSAGES || { health: [], money: [], over: [] };
+  const DECK = "souffle.deck";
+  let lastKind = "", lastMoney = -1, lastOver = -1, toastTimer = null;
+  function shuffled(n, avoidFirst) {
+    const o = [...Array(n).keys()];
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }
+    if (n > 1 && o[0] === avoidFirst) [o[0], o[1]] = [o[1], o[0]];
+    return o;
+  }
+  /** Paquet mélangé : un message ne revient qu'une fois tous les autres passés, jamais deux fois d'affilée. */
+  function drawHealth() {
+    const n = MSG.health.length; let d = null;
+    try { d = JSON.parse(localStorage.getItem(DECK) || "null"); } catch (e) {}
+    if (!d || !Array.isArray(d.order) || d.order.length !== n || d.pos >= n) d = { order: shuffled(n, d && d.order ? d.order[d.order.length - 1] : -1), pos: 0 };
+    const m = MSG.health[d.order[d.pos]]; d.pos++;
+    try { localStorage.setItem(DECK, JSON.stringify(d)); } catch (e) {}
+    return m;
+  }
+  function moneyText(t, k) {
+    const s = st(), per = P.perCig(s);
+    let days = 0, sum = 0;
+    for (let i = 1; i <= 7; i++) { const kk = P.addDays(k, -i); if (kk < s.startDate) break; sum += logOf(kk).length; days++; }
+    const avg = days ? sum / days : logOf(k).length;
+    return t.replace("{one}", P.money(per, s)).replace("{today}", P.money(per * logOf(k).length, s)).replace("{month}", P.money(Math.round(avg * per * 30), s));
+  }
+  function pickMessage(k, over) {
+    if (over && MSG.over.length && lastKind !== "over") { lastOver = (lastOver + 1) % MSG.over.length; lastKind = "over"; return MSG.over[lastOver]; }
+    if (lastKind !== "money" && st().packPrice > 0 && MSG.money.length && Math.random() < 1 / 6) {
+      let i = Math.floor(Math.random() * MSG.money.length); if (i === lastMoney) i = (i + 1) % MSG.money.length;
+      lastMoney = i; lastKind = "money"; return [MSG.money[i][0], moneyText(MSG.money[i][1], k)];
+    }
+    lastKind = "health"; return drawHealth();
+  }
+  function showToast(k) {
+    const n = logOf(k).length, q = P.quota(st(), k), over = n > q;
+    const m = pickMessage(k, over); if (!m) return;
+    const times = P.schedule(st(), q, logOf(k).map((ms) => stampMin(k, ms)).sort((a, b) => a - b));
+    const foot = over ? "Hors quota · on tient jusqu'au coucher" : n === q ? "Quota atteint · on tient jusqu'au coucher" : times[n] > P.bedMin(st()) ? "Plus de créneau avant ton coucher" : `Prochaine autorisée à ${P.fmtMin(times[n])}`;
+    const el = $("toast");
+    el.className = "toast" + (over ? " over" : "");
+    el.innerHTML = `<div class="row"><div class="ic">${m[0]}</div><div><div class="k">${over ? `Hors quota · ${n} sur ${q}` : `Cigarette ${n} sur ${q}`}</div><div class="m">${m[1]}</div></div></div>
+      <div class="foot"><span>${foot}</span><button type="button" class="undo" id="tUndo">Annuler</button></div><div class="bar"></div>`;
+    el.hidden = false; void el.offsetWidth; el.classList.add("in");
+    $("tUndo").onclick = (e) => { e.stopPropagation(); undo(); };
+    el.onclick = hideToast;
+    clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, 5000);
+  }
+  function hideToast() {
+    const el = $("toast"); if (!el || el.hidden) return;
+    clearTimeout(toastTimer); el.classList.remove("in");
+    setTimeout(() => { if (!el.classList.contains("in")) el.hidden = true; }, 250);
+  }
   function toggleSlot(i) { if (i < logOf(view).length) undo(); else smoke(); }
 
   // ---------- rendu : aujourd'hui ----------
@@ -94,6 +149,7 @@
     else if (n >= q) html = `<div class="label">Prochaine</div><div class="time">Demain</div><div class="in">${n > q ? "Plus rien jusqu'au coucher." : "Tu as tout utilisé. On tient jusqu'au coucher."}</div>`;
     else {
       const t = times[n], wait = t - minsNow(k);
+      if (t > P.bedMin(s)) html = `<div class="label">Prochaine</div><div class="time">Demain</div><div class="in">Plus de créneau avant ton coucher.</div>`; else
       html = `<div class="label">Prochaine autorisée</div><div class="time mono">${P.fmtMin(t)}</div><div class="in">${wait > 0 ? "dans " + fmtDur(wait) : "possible maintenant"}</div>`;
     }
     $("nextBox").innerHTML = html + pill;
@@ -107,7 +163,9 @@
       const done = i < n;
       const b = document.createElement("button");
       b.className = "slot" + (done ? " done" : "") + (isToday && !done && i === n ? " next" : "");
-      b.innerHTML = `<span class="e">🚬</span><span class="t">${done ? P.fmtMin(stampMin(k, log[i])) : P.fmtMin(t)}</span>`;
+      const pastBed = !done && t > P.bedMin(s);
+      if (pastBed) b.classList.add("late");
+      b.innerHTML = `<span class="e">🚬</span><span class="t">${done ? P.fmtMin(stampMin(k, log[i])) : pastBed ? "—" : P.fmtMin(t)}</span>`;
       b.setAttribute("aria-label", done ? `Fumée à ${P.fmtMin(stampMin(k, log[i]))}, toucher pour annuler` : `Prévue à ${P.fmtMin(t)}`);
       b.onclick = () => toggleSlot(i);
       box.appendChild(b);
@@ -455,7 +513,8 @@
   }
   document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => tab(b.dataset.tab)));
   function route(hash) {
-    if (hash === "#bilan") { tab("today"); maybeBilan(true); }
+    if (hash === "#update") { tab("today"); checkUpdate(true); }
+    else if (hash === "#bilan") { tab("today"); maybeBilan(true); }
     else if (hash === "#settings") tab("settings");
     else if (hash === "#path") tab("path");
     else tab("today");
@@ -465,19 +524,59 @@
   $("prev").onclick = () => { view = P.addDays(view, -1); render(); };
   $("next").onclick = () => { if (view < todayKey()) { view = P.addDays(view, 1); render(); } };
 
+  // ---------- mises à jour en un clic ----------
+  // À chaque publication : incrémenter APP_VERSION ici ET "version" dans changelog.json (+ VERSION de sw.js et les ?v=).
+  const APP_VERSION = 6;
+  let swReg = null, updShown = false;
+  async function checkUpdate(fromPush) {
+    try {
+      if (swReg) swReg.update().catch(() => {});
+      const c = await (await fetch("changelog.json?t=" + Date.now(), { cache: "no-store" })).json();
+      if (c.version > APP_VERSION) showUpdateBanner(c.headline);
+      else if (fromPush) toastSheet("Souffle est à jour", "Tu as déjà la dernière version.");
+    } catch (e) { /* hors ligne */ }
+  }
+  function showUpdateBanner(headline) {
+    if (updShown) return; updShown = true;
+    const el = document.createElement("div"); el.className = "upd"; el.id = "upd";
+    el.innerHTML = `<div class="t"><b>Nouvelle version de Souffle</b>${esc(headline || "Améliorations et corrections.")}</div><button class="go" type="button">Mettre à jour</button>`;
+    document.body.appendChild(el);
+    el.querySelector(".go").onclick = async () => {
+      el.querySelector(".go").textContent = "…";
+      try { localStorage.setItem("souffle.updating", "1"); } catch (e) {}
+      try { if (swReg) await swReg.update(); } catch (e) {}
+      try { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } catch (e) {}
+      location.reload();
+    };
+  }
+  /** Après une mise à jour : la fiche « Quoi de neuf ». Renvoie true si elle est affichée. */
+  function maybeNews(then) {
+    let seen = 0, updating = false;
+    try { seen = +localStorage.getItem("souffle.version") || 0; updating = localStorage.getItem("souffle.updating") === "1"; localStorage.setItem("souffle.version", String(APP_VERSION)); localStorage.removeItem("souffle.updating"); } catch (e) {}
+    if (!(updating || (seen && seen < APP_VERSION)) || !S.setupDone) return false;
+    fetch("changelog.json?t=" + Date.now(), { cache: "no-store" }).then((r) => r.json()).then((c) => {
+      openSheet(`<div class="kicker">Mise à jour installée</div><h2>Quoi de neuf ✨</h2><span class="ver">Version ${APP_VERSION}</span>
+        <div class="news">${(c.items || []).map((i) => `<div class="item"><span>${i[0]}</span><span><b>${esc(i[1])}</b><br><span class="muted">${esc(i[2])}</span></span></div>`).join("")}</div>
+        <button class="primary" id="nGo">Super</button>`);
+      $("nGo").onclick = () => { closeSheet(); then && then(); };
+    }).catch(() => then && then());
+    return true;
+  }
+
   // ---------- démarrage ----------
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js").then((r) => { swReg = r; }).catch(() => {});
     navigator.serviceWorker.addEventListener("message", (e) => { if (e.data && e.data.nav) route(e.data.nav); });
   }
   render(); route(location.hash);
   setTimeout(() => { const l = $("launch"); if (l) { l.classList.add("out"); setTimeout(() => l.remove(), 400); } }, 1000);
   if (!S.setupDone) { if (B.connected) pull().then(() => { if (!S.setupDone) openSetup(); }); else openWelcome(); }
-  else { if (location.hash !== "#bilan") maybeBilan(false); pull(); }
+  else { if (location.hash !== "#bilan" && !maybeNews(() => maybeBilan(false))) maybeBilan(false); pull(); }
+  checkUpdate(false); setInterval(() => checkUpdate(false), 30 * 60e3);
   setInterval(() => { const tk = todayKey(); if (view > tk) view = tk; render(); }, 30000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
     const tk = todayKey(); if (view !== tk && !$("sheet").innerHTML) view = tk;
-    render(); pull(); maybeBilan(false);
+    render(); pull(); maybeBilan(false); checkUpdate(false);
   });
 })();

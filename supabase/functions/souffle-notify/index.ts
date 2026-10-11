@@ -4,6 +4,7 @@
 //            Les données étant chiffrées, la fonction ne lit QUE wake, tz_offset et, si l'utilisateur l'a activé, preview
 //            (texte de notif préparé par son téléphone). Sinon : notif générique sans aucun chiffre.
 //   "test"   (JWT utilisateur) → notif de test.
+//   "broadcast" (secret cron) → annonce d'une nouvelle version à tous les appareils abonnés (ouvre #update).
 //   "signup" (public, avec code d'invitation) → crée le compte (email confirmé d'office ; inscriptions publiques fermées).
 //   "recover" (public, avec le hash du code de secours) → nouveau mot de passe, données conservées.
 //   "delete" (JWT utilisateur) → supprime le compte et toutes ses données (cascade).
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
     }
 
     let users;
-    if (mode === "tick") {
+    if (mode === "tick" || mode === "broadcast") {
       const { data: secret, error } = await db.rpc("souffle_cron_secret"); if (error) throw error;
       if (!sameSecret(req.headers.get("x-cron-secret") || "", secret)) return json({ error: "Unauthorized" }, 401);
       const { data, error: e2 } = await db.from("souffle_push_subscriptions").select("user_id"); if (e2) throw e2;
@@ -84,6 +85,7 @@ Deno.serve(async (req) => {
       if (!subs || !subs.length) { report.push({ skipped: "aucun appareil abonné" }); continue; }
       let message = null, logKey = null, today = null;
       if (mode === "test") message = { title: "Souffle", body: "Les notifications fonctionnent sur cet appareil.", url: "#today", tag: "test" };
+      else if (mode === "broadcast") message = { title: String(body.title || "Nouvelle version de Souffle ✨").slice(0, 80), body: String(body.body || "Touche ici puis « Mettre à jour ».").slice(0, 200), url: "#update", tag: "update" };
       else {
         const { data: row } = await db.from("souffle_state").select("wake, tz_offset, preview").eq("user_id", uid).maybeSingle();
         if (!row || !row.wake) { report.push({ skipped: "pas encore configuré" }); continue; }

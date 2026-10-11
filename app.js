@@ -526,7 +526,7 @@
 
   // ---------- mises à jour en un clic ----------
   // À chaque publication : incrémenter APP_VERSION ici ET "version" dans changelog.json (+ VERSION de sw.js et les ?v=).
-  const APP_VERSION = 6;
+  const APP_VERSION = 7;
   let swReg = null, updShown = false;
   async function checkUpdate(fromPush) {
     try {

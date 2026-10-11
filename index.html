@@ -36,9 +36,9 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:15px;line-height:1.45}
-body{padding-top:env(safe-area-inset-top,0px)}
+body{padding-top:calc(env(safe-area-inset-top,0px) + 6px)}
 button{font:inherit;color:inherit}
-.app{max-width:480px;margin:0 auto;padding-inline:20px;padding-block:8px calc(96px + env(safe-area-inset-bottom,0px))}
+.app{max-width:480px;margin:0 auto;padding-inline:20px;padding-block:8px calc(80px + env(safe-area-inset-bottom,0px))}
 .num{font-variant-numeric:tabular-nums}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .label{font-size:12px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
@@ -139,9 +139,9 @@ section+section{margin-top:28px}
 .sources{font-size:12px;color:var(--faint);line-height:1.5}
 
 /* Tab bar */
-.tabs{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+.tabs{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);border-top:1px solid var(--line);padding-bottom:max(4px, calc(env(safe-area-inset-bottom,0px) - 18px));z-index:5}
 .tabs nav{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
-.tabs button{border:0;background:none;padding:10px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:500;color:var(--faint);cursor:pointer}
+.tabs button{border:0;background:none;padding:8px 0 6px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:500;color:var(--faint);cursor:pointer}
 .tabs button svg{width:22px;height:22px}
 .tabs button[aria-current="page"]{color:var(--ink)}
 
@@ -189,7 +189,7 @@ section+section{margin-top:28px}
 .b-next .r{font-size:28px;font-weight:600;color:var(--accent);grid-row:1/3;grid-column:2;font-variant-numeric:tabular-nums}
 @keyframes grow{from{width:0}}
 /* Carte « un mot à chaque cigarette » */
-.toast{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:20;max-width:456px;margin:0 auto;background:var(--ink);color:#fff;border-radius:20px;padding:16px 16px 14px;box-shadow:0 14px 40px rgba(13,18,20,.25);overflow:hidden;cursor:pointer;opacity:0;transform:translateY(16px);transition:opacity .25s,transform .3s cubic-bezier(.2,.9,.3,1)}
+.toast{position:fixed;left:12px;right:12px;bottom:calc(70px + max(4px, calc(env(safe-area-inset-bottom,0px) - 18px)));z-index:20;max-width:456px;margin:0 auto;background:var(--ink);color:#fff;border-radius:20px;padding:16px 16px 14px;box-shadow:0 14px 40px rgba(13,18,20,.25);overflow:hidden;cursor:pointer;opacity:0;transform:translateY(16px);transition:opacity .25s,transform .3s cubic-bezier(.2,.9,.3,1)}
 .toast.in{opacity:1;transform:none}
 .toast .row{display:grid;grid-template-columns:44px 1fr;gap:12px;align-items:start}
 .toast .ic{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.1);display:grid;place-items:center;font-size:22px}
@@ -371,9 +371,9 @@ section+section{margin-top:28px}
 <div id="sheet"></div>
 
 <script src="config.js"></script>
-<script src="plan.js?v=6"></script>
-<script src="backend.js?v=6"></script>
-<script src="messages.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="plan.js?v=7"></script>
+<script src="backend.js?v=7"></script>
+<script src="messages.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

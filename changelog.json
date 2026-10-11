@@ -1,21 +1,16 @@
 {
- "version": 6,
- "headline": "Un mot à chaque cigarette, bilan repensé",
+ "version": 7,
+ "headline": "Écran mieux réparti, barre du bas abaissée",
  "items": [
   [
-   "💬",
-   "Un mot à chaque cigarette",
-   "Ce qu'elle fait au corps et ce que tu récupères, sans jugement."
-  ],
-  [
-   "📊",
-   "Bilan du matin repensé",
-   "Économies en grand, jauges santé, prochain palier."
+   "📱",
+   "Plus d'espace à l'écran",
+   "La barre du bas est descendue, le contenu respire."
   ],
   [
    "🔄",
-   "Mises à jour en un clic",
-   "Plus besoin de réinstaller l'app."
+   "Premier test des mises à jour",
+   "Si tu lis ceci, le bouton « Mettre à jour » fonctionne."
   ]
  ]
 }

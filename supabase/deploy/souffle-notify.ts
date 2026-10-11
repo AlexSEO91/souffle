@@ -101,57 +101,77 @@ const window = globalThis;
     return { avoided, days, saved: avoided * perCig(s), lifeHours: (avoided * 20) / 60 };
   }
 
-  // Repères de l'arrêt complet (OMS, Santé publique France), utilisés une fois à 0.
+  // Repères de l'arrêt complet (OMS, Santé publique France), affichés une fois à 0.
   const QUIT = [
-    [1, "🫀", "Après 24 h sans tabac, le monoxyde de carbone a quitté ton sang et ton cœur reçoit un sang mieux oxygéné."],
-    [2, "👃", "Après 48 h, le goût et l'odorat commencent à revenir."],
-    [3, "🫁", "Après 72 h, les bronches se relâchent et respirer devient plus facile."],
-    [14, "🏃", "Entre 2 et 12 semaines, la circulation et la capacité pulmonaire s'améliorent nettement : tu le sentiras à l'entraînement."],
-    [30, "🧹", "Après 1 à 9 mois, la toux et l'essoufflement diminuent, les cils des bronches se reconstruisent."],
-    [74, "🧬", "Environ 74 jours : un cycle complet de production de spermatozoïdes sans tabac. Volume, nombre et mobilité s'améliorent."],
-    [365, "❤️", "Après 1 an, le surrisque d'infarctus est divisé par deux."],
+    { d: 1, label: "Monoxyde de carbone éliminé", when: "24 h" },
+    { d: 2, label: "Goût et odorat reviennent", when: "48 h" },
+    { d: 3, label: "Bronches relâchées, souffle facile", when: "72 h" },
+    { d: 14, label: "Circulation, capacité pulmonaire", when: "2 sem." },
+    { d: 30, label: "Toux et essoufflement en baisse", when: "1 mois" },
+    { d: 74, label: "Cycle de spermatozoïdes sans tabac", when: "74 j" },
+    { d: 365, label: "Risque d'infarctus divisé par 2", when: "1 an" },
   ];
+  const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
+  const fmtLife = (min) => (min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? " " + pad(min % 60) : ""}` : `${min} min`);
+  const dayName = (fromKey, k) => {
+    const n = diffDays(fromKey, k);
+    if (n === 1) return "demain";
+    const d = parse(k);
+    return n < 7 ? "dès " + d.toLocaleDateString("fr-FR", { timeZone: "UTC", weekday: "long" }) : "le " + d.toLocaleDateString("fr-FR", { timeZone: "UTC", day: "numeric", month: "short" });
+  };
 
-  /** Bilan du jour `key` (en général hier). Tous les chiffres santé sont approximatifs et sourcés dans l'app. */
+  /** Bilan du jour `key` (en général hier), vu depuis `todayKey`. Données structurées pour la fiche + texte de notification.
+      Chiffres santé approximatifs, sourcés dans l'app : poumon ≈ baisse × 55 % (Godtfredsen 2005), CO proportionnel,
+      ≈ 20 min de vie par cigarette (UCL 2025), cœur : bénéfice réel seulement à 0 (Hackshaw 2018). */
   function report(state, key, todayKey) {
-    const s = settingsOf(state);
-    const q = quota(s, key), n = smoked(state, key), base = s.start;
-    const ok = n <= q, red = Math.max(0, Math.min(1, (base - n) / base));
+    const s = settingsOf(state), log = (state && state.log && state.log[key]) || [];
+    const q = quota(s, key), n = log.length, base = s.start;
+    const kind = n === 0 ? "zero" : n <= q ? "ok" : "over";
+    const red = Math.max(0, Math.min(1, (base - n) / base));
     const day = Math.max(0, base - n) * perCig(s);
-    const tq = quota(s, todayKey), left = Math.max(0, diffDays(todayKey, s.endDate));
-    const st = streak(state, key), zr = zeroRun(state, key);
-    const lung = Math.round(red * 55), co = Math.round(red * 100), gained = Math.max(0, base - n) * 20;
-    const health = [];
-    if (n === 0) {
-      const passed = QUIT.filter((m) => zr >= m[0]);
-      const next = QUIT.find((m) => zr < m[0]);
-      health.push(["🏆", `${zr} jour${zr > 1 ? "s" : ""} sans tabac.`]);
-      passed.slice(-2).forEach((m) => health.push([m[1], m[2]]));
-      if (next) health.push(["⏭️", `Prochain palier dans ${next[0] - zr} jour${next[0] - zr > 1 ? "s" : ""} : ${next[2].replace(/^[^,:]*[,:]\s*/, "")}`]);
-    } else if (ok) {
-      health.push(["🫁", `À ${n} au lieu de ${base}, ton risque de cancer du poumon baisse d'environ ${lung} % si tu tiens ce niveau.`]);
-      health.push(["🩸", `Environ ${co} % de monoxyde de carbone en moins dans le sang : plus d'oxygène pour les muscles et le cerveau.`]);
-      health.push(["⏳", `≈ ${gained >= 60 ? Math.floor(gained / 60) + " h " + pad(gained % 60) : gained + " min"} d'espérance de vie préservées sur la seule journée d'hier.`]);
-      health.push(["❤️", "Le cœur ne récupère vraiment qu'à zéro : même 1 cigarette par jour garde la moitié du surrisque. Chaque palier te rapproche du vrai gain."]);
-    } else {
-      health.push(["🧠", "Une envie dure 3 à 5 minutes. À chaque envie : un verre d'eau, 10 respirations lentes, tu bouges."]);
-      health.push(["🎯", `Aujourd'hui, ${tq} maximum. Suis les heures de l'app : elles sont calculées pour tenir jusqu'au coucher.`]);
-    }
-    const saved = ok && day > 0 ? { day, month: day * 30, year: day * 365, dayTxt: money(day, s), monthTxt: money(day * 30, s), yearTxt: money(day * 365, s) } : null;
-    const headline = n === 0 ? "Zéro. Journée parfaite." : ok ? "Quota tenu." : "Quota dépassé. On repart.";
-    const closing = ok
-      ? (tq === 0 ? "Objectif du jour : zéro. Tu en es capable." : `Accroche-toi, c'est dur, mais tu tiens le bon bout. Aujourd'hui : ${tq} maximum.`)
-      : `Un jour raté ne casse pas la mission. Aujourd'hui : ${tq} maximum, encore ${left} jours.`;
-    const firstTime = idealTimes(s, tq)[0];
-    // Notification (courte, lisible sur l'écran verrouillé)
-    const push = {
-      title: ok ? (n === 0 ? "Zéro cigarette hier 🏆" : `Bien joué : ${n}/${q} hier ✅`) : `Hier : ${n}/${q}. On repart 💪`,
-      body: ok
-        ? [saved ? `${saved.dayTxt} économisés · ${saved.monthTxt}/mois à ce rythme.` : null, n > 0 ? `Risque de cancer du poumon ≈ −${lung} %.` : null, tq > 0 ? `Aujourd'hui : ${tq} max, première à ${fmtMin(firstTime)}.` : "Aujourd'hui : zéro."].filter(Boolean).join(" ")
-        : `Aujourd'hui : ${tq} max${tq > 0 ? `, première à ${fmtMin(firstTime)}` : ""}. Une envie dure 5 minutes, pas plus.`,
-      url: "#bilan", tag: "bilan",
+    const saved = { day, month: day * 30, year: day * 365, dayTxt: money(day, s), monthTxt: money(day * 30, s), yearTxt: money(day * 365, s) };
+    const tq = quota(s, todayKey), first = schedule(s, tq, [])[0];
+    const tot = totals(state, key);
+    const zr = zeroRun(state, key), st = kind === "over" ? 0 : streak(state, key);
+    // palier suivant (à partir d'aujourd'hui)
+    let nk = todayKey; for (let i = 0; i < 400 && quota(s, nk) >= tq && tq > 0; i++) nk = addDays(nk, 1);
+    const next = tq > 0 ? { value: quota(s, nk), when: dayName(todayKey, nk) } : null;
+    const out = {
+      key, kind, ok: kind !== "over", n, q, base, saved, streak: st, zeroRun: zr, todayQuota: tq,
+      firstTxt: first != null ? fmtMin(first) : null, next, daysLeft: Math.max(0, diffDays(todayKey, s.endDate)),
+      totals: { savedTxt: money(tot.saved, s), avoided: tot.avoided, lifeTxt: fmtLife(Math.round(tot.lifeHours * 60)) },
     };
-    return { key, ok, n, q, base, saved, health, headline, closing, todayQuota: tq, daysLeft: left, streak: ok ? st : 0, push };
+    if (kind === "ok") {
+      out.metrics = [
+        { icon: "🫁", name: "Risque cancer du poumon", value: `−${Math.round(red * 55)} %`, pct: red, left: "aujourd'hui", right: "−55 % à zéro" },
+        { icon: "🩸", name: "Monoxyde de carbone", value: `−${Math.round(red * 100)} %`, pct: red, left: "plus d'oxygène aux muscles", right: "−100 % à zéro" },
+        { icon: "❤️", name: "Cœur", value: "à zéro", locked: true, left: "même 1/jour garde la moitié du risque", right: "débloqué à 0" },
+        { icon: "⏳", name: "Vie préservée", value: "+" + fmtLife((base - n) * 20), left: "hier", right: `${out.totals.lifeTxt} depuis le début` },
+      ];
+    }
+    if (kind === "over") {
+      const extra = log.slice().sort((x, y) => x - y)[q];
+      out.overTxt = extra ? fmtMin(minutesInto(key, extra, s.tzOffset)) : null;
+      out.belowBase = n < base;
+      out.tips = [
+        ["⏱️", "Une envie dure <b>3 à 5 minutes</b>. Eau, 10 respirations lentes, tu bouges."],
+        ["🎯", "Suis les heures de l'app : elles sont calculées pour tenir jusqu'au coucher."],
+      ];
+      if (out.overTxt) out.tips.push(["🔍", `Ta cigarette en trop d'hier était à <b>${out.overTxt}</b>. Ce soir, prévois autre chose à cette heure-là.`]);
+    }
+    if (kind === "zero") {
+      out.milestones = QUIT.map((m) => ({ label: m.label, done: zr >= m.d, when: zr >= m.d ? m.when : `dans ${m.d - zr} j` }));
+      const ci = out.milestones.findIndex((m) => !m.done); if (ci >= 0) out.milestones[ci].current = true;
+      const lastDone = QUIT.filter((m) => zr >= m.d).pop();
+      out.lastMilestone = lastDone ? lastDone.label : null;
+    }
+    // Notification (écran verrouillé)
+    const plan = tq > 0 ? `Aujourd'hui : ${tq} max${out.firstTxt ? `, première à ${out.firstTxt}` : ""}.` : "Aujourd'hui : zéro.";
+    if (kind === "ok") out.push = { title: `+${saved.dayTxt} hier · ${n}/${q} ✅`, body: `${saved.monthTxt}/mois à ce rythme. Poumons −${Math.round(red * 55)} %. ${plan}` };
+    else if (kind === "over") out.push = { title: `Hier : ${n}/${q}. On repart 💪`, body: `${n < base ? `Encore ${plural(base - n, "cigarette")} de moins que ton départ. ` : ""}${plan}` };
+    else out.push = { title: `${plural(zr, "jour")} sans tabac 🏆`, body: `+${saved.dayTxt} hier.${out.lastMilestone ? " " + out.lastMilestone + "." : ""} ${plan}`.trim() };
+    out.push.url = "#bilan"; out.push.tag = "bilan";
+    return out;
   }
 
   const api = { DEFAULTS, settingsOf, zeroTarget, dayKey, minutesInto, toMin, fmtMin, quota, zeroDate, idealTimes, schedule, smoked, perCig, money, streak, zeroRun, totals, report, addDays, diffDays, parse, iso };

@@ -195,14 +195,30 @@
     if (!force && (S.bilanSeen === tk || minsNow(tk) < P.toMin(s.wake) - 120)) return;
     const r = P.report(S, y, tk);
     S.bilanSeen = tk; commit();
-    const money = r.saved ? `<div class="money"><div><b class="num">${r.saved.dayTxt}</b><span>hier</span></div><div><b class="num">${r.saved.monthTxt}</b><span>par mois à ce rythme</span></div><div><b class="num">${r.saved.yearTxt}</b><span>par an à ce rythme</span></div></div>` : "";
-    openSheet(`
-      <div class="kicker">Bilan d'hier · ${dateLabel(y, { weekday: "long", day: "numeric", month: "long" })}</div>
-      <h2>${r.headline}</h2>
-      <div class="score"><b class="num">${r.n} / ${r.q}</b>${r.ok && r.streak > 1 ? `<span>· ${r.streak} jours de suite dans le quota 🔥</span>` : ""}</div>
-      ${money}
-      <ul class="health">${r.health.map((h) => `<li><span>${h[0]}</span><span>${h[1]}</span></li>`).join("")}</ul>
-      <p class="closing">${r.closing}</p>
+    const day = dateLabel(y, { weekday: "long", day: "numeric", month: "long" });
+    const chips = r.kind === "over"
+      ? `<span class="chip over">${r.n} / ${r.q} · +${r.n - r.q} hors quota</span>`
+      : r.kind === "zero"
+        ? `<span class="chip">0 cigarette</span><span class="chip grey">🏆 ${r.zeroRun} jour${r.zeroRun > 1 ? "s" : ""} sans tabac</span>`
+        : `<span class="chip">${r.n} / ${r.q} · quota tenu</span>${r.streak > 1 ? `<span class="chip grey">🔥 ${r.streak} jours</span>` : ""}`;
+    let hero, body, box;
+    if (r.kind === "over") {
+      hero = `<div class="b-big ink">On repart.</div><div class="b-sub">Un jour raté ne casse pas la mission.${r.belowBase ? ` Tu restes <b>sous ton niveau de départ</b> (${r.base}) : <b>+${r.saved.dayTxt}</b> économisés quand même.` : ""}</div>`;
+      body = `<h3 class="b-h">Pour tenir aujourd'hui</h3>${r.tips.map((t) => `<div class="b-tip"><span>${t[0]}</span><span>${t[1]}</span></div>`).join("")}`;
+      box = r.todayQuota > 0 ? { t: "Aujourd'hui", v: r.todayQuota, b: `maximum${r.firstTxt ? " · 1re à " + r.firstTxt : ""}` } : { t: "Aujourd'hui", v: "0", b: "objectif zéro" };
+    } else {
+      const sub = r.kind === "zero" ? `par jour désormais · <b>${r.saved.monthTxt}</b>/mois · <b>${r.saved.yearTxt}</b>/an` : `économisés hier · <b>${r.saved.monthTxt}</b>/mois · <b>${r.saved.yearTxt}</b>/an à ce rythme`;
+      hero = `<div class="b-big">+${r.saved.dayTxt}</div><div class="b-sub">${sub}</div>`;
+      if (r.kind === "ok") {
+        body = `<h3 class="b-h">Ton corps, à ce rythme</h3>` + r.metrics.map((m) => `<div class="b-m"><span class="e">${m.icon}</span><span class="n">${m.name}</span><span class="v${m.locked ? " off" : ""}">${m.value}</span>${m.pct != null || m.locked ? `<div class="b-bar${m.locked ? " lock" : ""}"><i style="width:${m.locked ? 100 : Math.max(3, Math.round(m.pct * 100))}%"></i></div>` : ""}<div class="cap"><span>${m.left}</span><span>${m.right}</span></div></div>`).join("");
+        box = r.next ? { t: "Prochain palier", v: r.next.value, b: `par jour, ${r.next.when}` } : { t: "Aujourd'hui", v: "0", b: "objectif zéro" };
+      } else {
+        body = `<h3 class="b-h">Ce que ton corps a déjà récupéré</h3>` + r.milestones.map((m) => `<div class="b-mile${m.done ? " done" : m.current ? " cur" : ""}"><span class="d"></span><b>${m.label}</b><span>${m.when}</span></div>`).join("");
+        box = { t: "Depuis le début", v: r.totals.lifeTxt, b: `de vie · ${r.totals.savedTxt} · ${r.totals.avoided} évitées` };
+      }
+    }
+    openSheet(`<div class="kicker">Bilan d'hier · ${day}</div><div class="b-chips">${chips}</div>${hero}${body}
+      <div class="b-next"><div class="t">${box.t}</div><div class="r">${box.v}</div><div class="b">${box.b}</div></div>
       <button class="primary" data-close>${r.ok ? "C'est parti" : "On repart"}</button>`);
   }
   function openSheet(inner, locked) {

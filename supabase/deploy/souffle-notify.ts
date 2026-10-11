@@ -19,7 +19,8 @@ const window = globalThis;
   const DEFAULTS = {
     start: 18,               // conso de départ / jour
     startDate: "2026-10-11",
-    endDate: "2027-01-01",   // date limite : 0 au plus tard ce jour-là
+    endDate: "2027-01-01",   // objectif : être à 0 (tenu) ce jour-là
+    zeroBuffer: 7,           // jours à 0 avant l'objectif, pour qu'il soit vraiment tenu
     packPrice: 160,
     packSize: 20,
     currency: "฿",
@@ -36,9 +37,11 @@ const window = globalThis;
   const toMin = (t) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + (m || 0); };
   const fmtMin = (m) => { m = ((Math.round(m) % 1440) + 1440) % 1440; return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
 
+  /** Date à laquelle le quota doit être à 0 : l'objectif moins la marge. */
+  function zeroTarget(s) { return addDays(s.endDate, -Math.max(0, Number(s.zeroBuffer) || 0)); }
   /** Quota du jour : descente linéaire de `start` (jour de départ) à 0 (date limite). */
   function quota(s, key) {
-    const N = diffDays(s.startDate, s.endDate), d = diffDays(s.startDate, key);
+    const N = diffDays(s.startDate, zeroTarget(s)), d = diffDays(s.startDate, key);
     if (N <= 0) return 0;
     if (d < 0) return s.start;
     if (d >= N) return 0;
@@ -145,7 +148,7 @@ const window = globalThis;
     return { key, ok, n, q, base, saved, health, headline, closing, todayQuota: tq, daysLeft: left, streak: ok ? st : 0, push };
   }
 
-  const api = { DEFAULTS, settingsOf, dayKey, minutesInto, toMin, fmtMin, quota, zeroDate, idealTimes, schedule, smoked, perCig, money, streak, zeroRun, totals, report, addDays, diffDays, parse, iso };
+  const api = { DEFAULTS, settingsOf, zeroTarget, dayKey, minutesInto, toMin, fmtMin, quota, zeroDate, idealTimes, schedule, smoked, perCig, money, streak, zeroRun, totals, report, addDays, diffDays, parse, iso };
   root.Souffle = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

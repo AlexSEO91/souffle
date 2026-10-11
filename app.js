@@ -60,7 +60,7 @@
     const s = st(), tk = todayKey(), k = view, isToday = k === tk;
     const q = P.quota(s, k), n = logOf(k).length;
     const zero = P.zeroDate(s), left = Math.max(0, P.diffDays(tk, zero));
-    $("countdown").innerHTML = left > 0 ? `<b class="num">J-${left}</b> · zéro le ${dateLabel(zero, { day: "numeric", month: "short" })}` : `<b>Phase zéro</b>`;
+    $("countdown").innerHTML = left > 0 ? `<b class="num">J-${left}</b> avant zéro (${dateLabel(zero, { day: "numeric", month: "short" })})` : `<b>Zéro</b> · tenu ${P.zeroRun(S, P.addDays(tk, -1))} j`;
 
     const dn = P.diffDays(s.startDate, k) + 1;
     $("dayTitle").innerHTML = (isToday ? "Aujourd'hui" : dateLabel(k, { weekday: "long", day: "numeric", month: "short" })) +
@@ -205,17 +205,18 @@
   // ---------- réglages ----------
   function fillForm() {
     const s = st();
-    $("fStart").value = s.start; $("fStartDate").value = s.startDate; $("fEndDate").value = s.endDate;
+    $("fStart").value = s.start; $("fStartDate").value = s.startDate; $("fEndDate").value = s.endDate; $("fBuffer").value = s.zeroBuffer;
     $("fPrice").value = s.packPrice; $("fPack").value = s.packSize; $("fCur").value = s.currency;
     $("fWake").value = s.wake; $("fSleep").value = s.sleep;
     const z = P.zeroDate(s);
-    $("planNote").textContent = `Descente de ${s.start} à 0 : environ −1 tous les ${Math.max(1, Math.round(P.diffDays(s.startDate, s.endDate) / s.start))} jours. Zéro atteint le ${dateLabel(z, { day: "numeric", month: "long", year: "numeric" })}. Avance la date limite pour aller plus vite.`;
+    $("planNote").textContent = `Descente de ${s.start} à 0 : environ −1 tous les ${Math.max(1, Math.round(P.diffDays(s.startDate, P.zeroTarget(s)) / s.start))} jours. Zéro atteint le ${dateLabel(z, { day: "numeric", month: "long", year: "numeric" })}. Puis ${P.diffDays(z, s.endDate)} jours à 0 avant l'objectif du ${dateLabel(s.endDate, { day: "numeric", month: "long" })}.`;
   }
   $("save").onclick = () => {
     const s = st();
     s.start = Math.max(1, Math.round(+$("fStart").value) || s.start);
     if ($("fStartDate").value) s.startDate = $("fStartDate").value;
     if ($("fEndDate").value && $("fEndDate").value > s.startDate) s.endDate = $("fEndDate").value;
+    s.zeroBuffer = Math.max(0, Math.min(60, Math.round(+$("fBuffer").value) || 0));
     s.packPrice = Math.max(0, +$("fPrice").value || 0);
     s.packSize = Math.max(1, Math.round(+$("fPack").value) || 20);
     s.currency = $("fCur").value.trim() || s.currency;

@@ -223,7 +223,8 @@ section+section{margin-top:28px}
       <form class="form" id="form" autocomplete="off">
         <label>Conso de départ / jour<input id="fStart" type="number" min="1" max="60" inputmode="numeric"></label>
         <label>Début du plan<input id="fStartDate" type="date"></label>
-        <label>Zéro au plus tard le<input id="fEndDate" type="date"></label>
+        <label>Objectif : 0 tenu le<input id="fEndDate" type="date"></label>
+        <label>Jours à 0 avant (marge)<input id="fBuffer" type="number" min="0" max="60" inputmode="numeric"></label>
         <label>Prix du paquet<input id="fPrice" type="number" min="0" step="any" inputmode="decimal"></label>
         <label>Cigarettes / paquet<input id="fPack" type="number" min="1" inputmode="numeric"></label>
         <label>Devise<input id="fCur" type="text" maxlength="4"></label>
@@ -263,8 +264,8 @@ section+section{margin-top:28px}
 <div id="sheet"></div>
 
 <script src="config.js"></script>
-<script src="plan.js?v=1"></script>
-<script src="backend.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="plan.js?v=2"></script>
+<script src="backend.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

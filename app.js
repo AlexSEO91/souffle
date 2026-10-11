@@ -455,6 +455,7 @@
     navigator.serviceWorker.addEventListener("message", (e) => { if (e.data && e.data.nav) route(e.data.nav); });
   }
   render(); route(location.hash);
+  setTimeout(() => { const l = $("launch"); if (l) { l.classList.add("out"); setTimeout(() => l.remove(), 400); } }, 1000);
   if (!S.setupDone) { if (B.connected) pull().then(() => { if (!S.setupDone) openSetup(); }); else openWelcome(); }
   else { if (location.hash !== "#bilan") maybeBilan(false); pull(); }
   setInterval(() => { const tk = todayKey(); if (view > tk) view = tk; render(); }, 30000);
